@@ -1,0 +1,119 @@
+---
+title: "ESM 244 Week 8: Principal Components Analysis"
+author: "Lily Heidger"
+format: 
+  html:
+    embed-resources: true
+editor: source
+---
+
+
+# Principal Component Analysis (PCA)
+```{r}
+library(tidyverse)
+library(here)
+library(ggfortify)
+```
+
+```{r}
+hdi_data_raw <- read_csv(here("data", "hdi_clean.csv"))
+
+hdi_data_long <- hdi_data_raw |>
+  pivot_longer(names_to = 'name', values_to = 'value', where(is.numeric)) #select all of the columns where they are numeric
+
+
+ggplot(hdi_data_long, aes(x = value)) +
+  geom_histogram() +
+  facet_wrap(~name, scales = 'free')
+```
+
+```{r}
+hdi_data <- hdi_data_raw %>% 
+  drop_na() %>% 
+  mutate(hdicode = factor(hdicode, levels = c('Low', 'Medium', 'High', 'Very High'))) %>% 
+  mutate(gnipc_2021 = log(gnipc_2021))
+
+## run the PCA
+hdi_pca <- hdi_data %>% 
+  select(where(is.numeric)) %>% 
+  prcomp(scale = TRUE) #will set all of the variables to the same scale for comparison
+
+str(hdi_pca)
+hdi_pca$rotation
+# PC1 looks mostly even, others do not
+```
+
+
+## Biplot
+
+Let's plot original data on some original variables
+
+```{r}
+ggplot(hdi_data) +
+  geom_point(aes(x = gnipc_2021, y = le_2021, color = hdicode)) +
+  theme_minimal()
+```
+
+Now let's make a biplot
+
+```{r}
+loadings <- data.frame(hdi_pca$rotation * 8) %>% 
+  mutate(axis = row.names(.))
+
+new_pts_df <- data.frame(hdi_pca$x)
+
+ggplot() +
+  geom_point(data = new_pts_df, aes(x = PC1, y = PC2), color = 'cornflowerblue') +
+  geom_segment(data = loadings, x = 0, y = 0, 
+               aes(xend = PC1, yend = PC2, group = axis), 
+               arrow = arrow(length = unit(.25, 'cm')))+
+  geom_text(data = loadings, 
+            aes(x = PC1, y = PC2, label = axis), vjust = 0, nudge_y = .01)
+```
+
+
+Now by autoplot
+
+```{r}
+autoplot(
+  hdi_pca, 
+  data = hdi_data,
+  loadings = TRUE,
+  color = 'hdicode',
+  loadings.label = TRUE,
+  loadings.color = 'black',
+  loadings.label.color = 'black',
+  loadings.label.vjust = -.5
+) + scale_color_manual(values = c('red2', 'orange2', 'yellowgreen', 'darkgreen'))
+
+```
+## Screeplot by hand
+```{r}
+sd_vec <- hdi_pca$sdev
+var_vec <- sd_vec^2
+pc_names <- colnames(hdi_pca$rotation)
+pct_expl_df <- data.frame(v = var_vec, 
+                          pct_v = var_vec / sum(var_vec),
+                          pc = pc_names) %>% 
+  mutate(pct_lbl = paste0(round(pct_v * 100, 1), '%'))
+
+ggplot(pct_expl_df, aes(x = pc, y = v)) +
+  geom_col() +
+  geom_text(aes(label = pct_lbl), vjust = 0, nudge_y = .002) +
+  labs(x = 'Principal component', y = 'Variance explained')
+```
+
+
+```{r}
+screeplot(hdi_pca, type = 'barplot')
+```
+
+
+
+
+
+
+
+
+
+
